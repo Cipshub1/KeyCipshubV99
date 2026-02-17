@@ -1,13 +1,7 @@
 --====================================================
--- 🌊 CIPHUB V99 | UPDATED: ISOLATED DROPDOWN + SCROLL FIX 🌊
--- STATUS: FIXED INVISIBLE + REFRESH LIST + SMART VISIBILITY LOCK
--- MODIFIED: SEPARATED SELECT PLAYER GROUP FOR BETTER SCROLLING
--- UPDATE: STABLE AUTO-FOLLOW LOCK BODY
--- FIX: MOVEMENT RESET & JUMP POWER ADDED
--- SETTINGS: ALL UI SETTINGS ENABLED BY DEFAULT (REQUESTED)
--- NEW FEATURES: FULLBRIGHT, ANTI-AFK, RESPAWN, SERVER HOP, REJOIN
--- FIX AIMBOT: 100% STATIC LOCK (NO SHAKING) - STABILIZED
--- FIX SCROLL: SELECT PLAYER LIST SCROLLING REPAIRED
+-- 🌊 CIPHUB V99 | STABILIZED FOR MOBILE 🌊
+-- STATUS: OPTIMIZED PERFORMANCE (LAG FIX)
+-- MODIFIED: CPU THROTTLING & MEMORY MANAGEMENT
 --====================================================
 
 local Players = game:GetService("Players")
@@ -35,29 +29,66 @@ local PlayerConfig = {
     SpectatePlayer = false,
     Fullbright = false,
     AntiAFK = false,
+    HDGraphics = false,
     TPX = 0,
     TPY = 0,
     TPZ = 0
 }
 
--- Fullbright Logic
+-- Lighting Cache
 local OldLighting = {
     Ambient = Lighting.Ambient,
     OutdoorAmbient = Lighting.OutdoorAmbient,
     Brightness = Lighting.Brightness,
-    ClockTime = Lighting.ClockTime
+    ClockTime = Lighting.ClockTime,
+    GlobalShadows = Lighting.GlobalShadows,
+    Exposure = Lighting.ExposureCompensation
 }
 
-RunService.RenderStepped:Connect(function()
-    if PlayerConfig.Fullbright then
-        Lighting.Ambient = Color3.new(1, 1, 1)
-        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 14
+-- ====================================================
+-- OPTIMIZED HD GRAPHICS (MOBILE FRIENDLY)
+-- ====================================================
+local function SetHDGraphics(state)
+    if state then
+        Lighting.ExposureCompensation = 0.5
+        Lighting.GlobalShadows = true
+        
+        local bloom = Lighting:FindFirstChild("CipsBloom") or Instance.new("BloomEffect", Lighting)
+        bloom.Name = "CipsBloom"
+        bloom.Intensity = 0.5 -- Reduced for Mobile
+        bloom.Size = 12 -- Reduced
+        
+        local colorCorr = Lighting:FindFirstChild("CipsColor") or Instance.new("ColorCorrectionEffect", Lighting)
+        colorCorr.Name = "CipsColor"
+        colorCorr.Saturation = 0.1
+        
+        -- Gunakan Level 6 untuk Mobile (Tetap tajam, tapi hemat batre/FPS)
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level06
+    else
+        Lighting.ExposureCompensation = OldLighting.Exposure
+        if Lighting:FindFirstChild("CipsBloom") then Lighting.CipsBloom:Destroy() end
+        if Lighting:FindFirstChild("CipsColor") then Lighting.CipsColor:Destroy() end
+        if Lighting:FindFirstChild("CipsAtmos") then Lighting.CipsAtmos:Destroy() end
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+    end
+end
+
+-- Fullbright Logic (Optimized frequency)
+local fbTimer = 0
+RunService.Heartbeat:Connect(function(dt)
+    fbTimer = fbTimer + dt
+    if fbTimer >= 0.5 then -- Hanya cek tiap 0.5 detik
+        fbTimer = 0
+        if PlayerConfig.Fullbright then
+            Lighting.Ambient = Color3.new(1, 1, 1)
+            Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+        end
     end
 end)
 
--- Anti-AFK Logic
+-- Anti-AFK
 LP.Idled:Connect(function()
     if PlayerConfig.AntiAFK then
         local VirtualUser = game:GetService("VirtualUser")
@@ -66,7 +97,7 @@ LP.Idled:Connect(function()
     end
 end)
 
--- Cleanup UI Lama
+-- Cleanup UI
 pcall(function() 
     if LP.PlayerGui:FindFirstChild("CiphubV99") then LP.PlayerGui.CiphubV99:Destroy() end
     if Lighting:FindFirstChild("CipsBlur") then Lighting.CipsBlur:Destroy() end
@@ -114,7 +145,7 @@ local function Round(obj, rad)
 end
 
 -- ====================================================
--- SMART AIMBOT VISIBILITY ENGINE
+-- SMART AIMBOT ENGINE
 -- ====================================================
 local function IsVisible(targetPart)
     if not targetPart or not LP.Character then return false end
@@ -124,10 +155,8 @@ local function IsVisible(targetPart)
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
     params.FilterDescendantsInstances = {LP.Character, Camera}
-    params.IgnoreWater = true
     local result = workspace:Raycast(origin, direction, params)
-    if not result or result.Instance:IsDescendantOf(targetPart.Parent) then return true end
-    return false
+    return not result or result.Instance:IsDescendantOf(targetPart.Parent)
 end
 
 local function GetBestTarget()
@@ -136,13 +165,10 @@ local function GetBestTarget()
         if target and target.Character and target.Character:FindFirstChild("Head") then
             local head = target.Character.Head
             local _, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if onScreen and IsVisible(head) then
-                return target
-            end
+            if onScreen and IsVisible(head) then return target end
         end
         return nil 
     end
-
     local target = nil
     local shortestDist = math.huge
     for _, v in pairs(Players:GetPlayers()) do
@@ -159,7 +185,7 @@ local function GetBestTarget()
 end
 
 -- ====================================================
--- ESP & PARTICLES & DRAGGABLE
+-- ESP SYSTEM (STABILIZED)
 -- ====================================================
 local function CreateESP(plr)
     local Name = Drawing.new("Text")
@@ -214,18 +240,18 @@ local ParticleList = {}
 local ParticlesActive = false
 local function CreateParticle(parent)
     local p = Instance.new("Frame", parent)
-    p.Size = UDim2.fromOffset(math.random(1, 3), math.random(1, 3))
+    p.Size = UDim2.fromOffset(2, 2)
     p.BackgroundColor3 = Color3.new(1, 1, 1)
-    p.BackgroundTransparency = math.random(2, 5) / 10
+    p.BackgroundTransparency = 0.5
     p.BorderSizePixel = 0
     p.Position = UDim2.new(math.random(), 0, math.random(), 0)
     Round(p, 100)
-    local velocity = Vector2.new(math.random(-20, 20) / 5000, math.random(-20, 20) / 5000)
+    local velocity = Vector2.new(math.random(-10, 10) / 5000, math.random(-10, 10) / 5000)
     return {obj = p, vel = velocity}
 end
 local function SetParticles(state, container)
     ParticlesActive = state
-    if state then for i = 1, 50 do table.insert(ParticleList, CreateParticle(container)) end
+    if state then for i = 1, 25 do table.insert(ParticleList, CreateParticle(container)) end -- Reduced for HP
     else for _, v in pairs(ParticleList) do v.obj:Destroy() end ParticleList = {} end
 end
 
@@ -267,7 +293,7 @@ end
 local function CreateManualInput(parent, labelText, placeholder, callback)
     local InputFrame = Instance.new("Frame", parent); InputFrame.Size = UDim2.new(1, -15, 0, 40); InputFrame.BackgroundTransparency = 1; InputFrame.ZIndex = parent.ZIndex + 5
     local Label = Instance.new("TextLabel", InputFrame); Label.Size = UDim2.new(0.4, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Text = labelText; Label.Font = Enum.Font.Gotham; Label.TextColor3 = Theme.Text; Label.TextSize = 13; Label.TextXAlignment = "Left"; Label.BackgroundTransparency = 1; Label.ZIndex = InputFrame.ZIndex + 1
-    local Box = Instance.new("TextBox", InputFrame); Box.Name = "InputBox"; Box.Size = UDim2.new(0.4, 0, 0, 28); Box.Position = UDim2.new(0.55, 0, 0.5, -14); Box.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Box.TextColor3 = Theme.Accent; Box.Font = Enum.Font.GothamBold; Box.TextSize = 12; Box.PlaceholderText = placeholder; Box.Text = ""; Box.ZIndex = InputFrame.ZIndex + 2; Round(Box, 4); Box.ClipsDescendants = true; Box.Active = true
+    local Box = Instance.new("TextBox", InputFrame); Box.Name = "InputBox"; Box.Size = UDim2.new(0.4, 0, 0, 28); Box.Position = UDim2.new(0.55, 0, 0.5, -14); Box.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Box.TextColor3 = Theme.Accent; Box.Font = Enum.Font.GothamBold; Box.TextSize = 12; Box.PlaceholderText = placeholder; Box.Text = ""; Box.ZIndex = InputFrame.ZIndex + 2; Round(Box, 4); Box.ClipsDescendants = true
     local BoxStroke = Instance.new("UIStroke", Box); BoxStroke.Color = Theme.Stroke; BoxStroke.Thickness = 0.8
     Box.FocusLost:Connect(function() local val = tonumber(Box.Text) if val then callback(val); Box.PlaceholderText = "" .. val end; Box.Text = "" end)
     return InputFrame
@@ -333,16 +359,18 @@ local Content = Instance.new("Frame", Main); Content.Size = UDim2.new(1, -195, 1
 local Pages = {}
 
 local UserPanel = Instance.new("Frame", Sidebar); UserPanel.Name = "UserPanel"; UserPanel.Size = UDim2.new(1, -16, 0, 50); UserPanel.Position = UDim2.new(0, 8, 1, -60); UserPanel.BackgroundColor3 = Color3.fromRGB(22, 22, 22); UserPanel.ZIndex = 3; Round(UserPanel, 8)
-UserPanel.Visible = true 
 Instance.new("UIStroke", UserPanel).Color = Theme.Stroke
 local AvatarImg = Instance.new("ImageLabel", UserPanel); AvatarImg.Size = UDim2.fromOffset(36, 36); AvatarImg.Position = UDim2.new(0, 7, 0.5, -18); AvatarImg.BackgroundColor3 = Color3.fromRGB(35, 35, 35); AvatarImg.Image = "rbxthumb://type=AvatarHeadShot&id="..LP.UserId.."&w=150&h=150"; AvatarImg.ZIndex = 4; Round(AvatarImg, 100)
-local DisplayNameLabel = Instance.new("TextLabel", UserPanel); DisplayNameLabel.Size = UDim2.new(1, -60, 0, 15); DisplayNameLabel.Position = UDim2.new(0, 50, 0.5, -14); DisplayNameLabel.Text = LP.DisplayName; DisplayNameLabel.Font = Enum.Font.GothamBold; DisplayNameLabel.TextColor3 = Theme.Text; DisplayNameLabel.TextSize = 11; DisplayNameLabel.TextXAlignment = "Left"; DisplayNameLabel.BackgroundTransparency = 1; DisplayNameLabel.ZIndex = 4; DisplayNameLabel.ClipsDescendants = true
-local UsernameLabel = Instance.new("TextLabel", UserPanel); UsernameLabel.Size = UDim2.new(1, -60, 0, 15); UsernameLabel.Position = UDim2.new(0, 50, 0.5, 0); UsernameLabel.Text = "@"..LP.Name; UsernameLabel.Font = Enum.Font.Gotham; UsernameLabel.TextColor3 = Theme.SubText; UsernameLabel.TextSize = 9; UsernameLabel.TextXAlignment = "Left"; UsernameLabel.BackgroundTransparency = 1; UsernameLabel.ZIndex = 4; UsernameLabel.ClipsDescendants = true
+local DisplayNameLabel = Instance.new("TextLabel", UserPanel); DisplayNameLabel.Size = UDim2.new(1, -60, 0, 15); DisplayNameLabel.Position = UDim2.new(0, 50, 0.5, -14); DisplayNameLabel.Text = LP.DisplayName; DisplayNameLabel.Font = Enum.Font.GothamBold; DisplayNameLabel.TextColor3 = Theme.Text; DisplayNameLabel.TextSize = 11; DisplayNameLabel.TextXAlignment = "Left"; DisplayNameLabel.BackgroundTransparency = 1; DisplayNameLabel.ZIndex = 4
+local UsernameLabel = Instance.new("TextLabel", UserPanel); UsernameLabel.Size = UDim2.new(1, -60, 0, 15); UsernameLabel.Position = UDim2.new(0, 50, 0.5, 0); UsernameLabel.Text = "@"..LP.Name; UsernameLabel.Font = Enum.Font.Gotham; UsernameLabel.TextColor3 = Theme.SubText; UsernameLabel.TextSize = 9; UsernameLabel.TextXAlignment = "Left"; UsernameLabel.BackgroundTransparency = 1; UsernameLabel.ZIndex = 4
 
 local SettingsOverlay = Instance.new("ScrollingFrame", Main); SettingsOverlay.Name = "SettingsOverlay"; SettingsOverlay.Size = UDim2.new(1, -180, 1, -30); SettingsOverlay.Position = UDim2.new(0, 180, 1, 0); SettingsOverlay.BackgroundColor3 = Theme.Main; SettingsOverlay.ZIndex = 200; SettingsOverlay.BorderSizePixel = 0; SettingsOverlay.ScrollBarThickness = 0; SettingsOverlay.ClipsDescendants = true
 local SettingsLayout = Instance.new("UIListLayout", SettingsOverlay); SettingsLayout.Padding = UDim.new(0, 10)
 local SettingsPadding = Instance.new("UIPadding", SettingsOverlay); SettingsPadding.PaddingLeft = UDim.new(0, 15); SettingsPadding.PaddingTop = UDim.new(0, 10)
 
+-- Settings Content
+CreateSection(SettingsOverlay, "Global Graphics (HD)")
+CreateToggle(SettingsOverlay, "Ultra HD Graphics (Anti-Lag)", false, function(v) PlayerConfig.HDGraphics = v; SetHDGraphics(v) end)
 CreateSection(SettingsOverlay, "UI Settings")
 CreateToggle(SettingsOverlay, "UI Transparan", true, function(state) local trans = state and 0.3 or 0; TweenService:Create(Main, TweenInfo.new(0.3), {BackgroundTransparency = trans}):Play(); TweenService:Create(Sidebar, TweenInfo.new(0.3), {BackgroundTransparency = trans}):Play() end)
 CreateToggle(SettingsOverlay, "Show Avatar Profile", true, function(state) UserPanel.Visible = state end)
@@ -373,51 +401,27 @@ local tabTP      = CreateTab("Tp player", "📍")
 local tabMisc    = CreateTab("Misc", "🔧")
 
 -- ====================================================
--- COMBAT TAB (FIXED SCROLL & STATIC AIM)
+-- DROPDOWN FIX
 -- ====================================================
-local BoxCombatBoost = CreateFeatureBox(tabCombat)
-CreateSection(BoxCombatBoost, "Combat Booster")
-CreateManualInput(BoxCombatBoost, "Hitbox Size", "2", function(v) PlayerConfig.HitboxSize = v end)
-CreateToggle(BoxCombatBoost, "Enable Hitbox", false, function(v) PlayerConfig.HitboxEnabled = v end)
-
-local function RefreshCombatPlayers()
-    local names = {"[ None / All Players ]"} 
-    for _, plr in pairs(Players:GetPlayers()) do 
-        if plr ~= LP then table.insert(names, plr.Name) end 
-    end
-    return names
-end
-
 local function CreateDropdownFixed(parent, text, options, callback)
     local DropdownFrame = Instance.new("Frame", parent); DropdownFrame.Size = UDim2.new(1, -15, 0, 45); DropdownFrame.BackgroundTransparency = 1; DropdownFrame.ZIndex = 50
     local Label = Instance.new("TextLabel", DropdownFrame); Label.Size = UDim2.new(0.4, 0, 1, 0); Label.Position = UDim2.new(0, 10, 0, 0); Label.Text = text; Label.Font = Enum.Font.Gotham; Label.TextColor3 = Theme.Text; Label.TextSize = 13; Label.TextXAlignment = "Left"; Label.BackgroundTransparency = 1; Label.ZIndex = 51
     local DropdownBtn = Instance.new("TextButton", DropdownFrame); DropdownBtn.Size = UDim2.new(0.55, 0, 0, 32); DropdownBtn.Position = UDim2.new(0.42, 0, 0.5, -16); DropdownBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25); DropdownBtn.Text = "Select Player..."; DropdownBtn.Font = Enum.Font.GothamBold; DropdownBtn.TextColor3 = Theme.Accent; DropdownBtn.TextSize = 12; DropdownBtn.ZIndex = 52; Round(DropdownBtn, 4)
-    local BoxStroke = Instance.new("UIStroke", DropdownBtn); BoxStroke.Color = Theme.Stroke; BoxStroke.Thickness = 0.8
-    
-    local DropdownListScroll = Instance.new("ScrollingFrame", DropdownBtn); DropdownListScroll.Size = UDim2.new(1, 0, 0, 0); DropdownListScroll.Position = UDim2.new(0, 0, 1, 5); DropdownListScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25); DropdownListScroll.ZIndex = 1000; DropdownListScroll.Visible = false; DropdownListScroll.ScrollBarThickness = 2; DropdownListScroll.BorderSizePixel = 0; Round(DropdownListScroll, 4)
-    local ListStroke = Instance.new("UIStroke", DropdownListScroll); ListStroke.Color = Theme.Accent; ListStroke.Thickness = 1
+    local DropdownListScroll = Instance.new("ScrollingFrame", DropdownBtn); DropdownListScroll.Size = UDim2.new(1, 0, 0, 0); DropdownListScroll.Position = UDim2.new(0, 0, 1, 5); DropdownListScroll.BackgroundColor3 = Color3.fromRGB(25, 25, 25); DropdownListScroll.ZIndex = 1000; DropdownListScroll.Visible = false; DropdownListScroll.ScrollBarThickness = 2; Round(DropdownListScroll, 4)
     local ListLayout = Instance.new("UIListLayout", DropdownListScroll); ListLayout.Padding = UDim.new(0, 2)
     
     local function UpdateOptions(newOptions)
         for _, child in pairs(DropdownListScroll:GetChildren()) do if child:IsA("TextButton") then child:Destroy() end end
         for _, option in pairs(newOptions) do
-            local OptionBtn = Instance.new("TextButton", DropdownListScroll); OptionBtn.Size = UDim2.new(1, 0, 0, 28); OptionBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); OptionBtn.BorderSizePixel = 0; OptionBtn.Text = option; OptionBtn.Font = Enum.Font.Gotham; OptionBtn.TextColor3 = Theme.Text; OptionBtn.TextSize = 11; OptionBtn.ZIndex = 1001
-            OptionBtn.MouseButton1Click:Connect(function() 
-                DropdownBtn.Text = option; 
-                DropdownListScroll.Visible = false; 
-                callback(option) 
-            end)
+            local OptionBtn = Instance.new("TextButton", DropdownListScroll); OptionBtn.Size = UDim2.new(1, 0, 0, 28); OptionBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); OptionBtn.Text = option; OptionBtn.Font = Enum.Font.Gotham; OptionBtn.TextColor3 = Theme.Text; OptionBtn.TextSize = 11; OptionBtn.ZIndex = 1001
+            OptionBtn.MouseButton1Click:Connect(function() DropdownBtn.Text = option; DropdownListScroll.Visible = false; callback(option) end)
         end
-        -- FIX SCROLL CANVAS
-        DropdownListScroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
     end
-    
     UpdateOptions(options)
-    DropdownBtn.MouseButton1Click:Connect(function()
+    DropdownBtn.MouseButton1Click:Connect(function() 
         DropdownListScroll.Visible = not DropdownListScroll.Visible
-        DropdownListScroll.Size = UDim2.new(1, 0, 0, math.min(ListLayout.AbsoluteContentSize.Y + 5, 120)) 
+        DropdownListScroll.Size = UDim2.new(1, 0, 0, math.min(ListLayout.AbsoluteContentSize.Y + 5, 120))
         DropdownListScroll.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
-        DropdownFrame.ZIndex = DropdownListScroll.Visible and 500 or 50 
     end)
     return {Frame = DropdownFrame, Update = UpdateOptions}
 end
@@ -425,114 +429,72 @@ end
 local function CreateButton(parent, text, callback)
     local ButtonFrame = Instance.new("Frame", parent); ButtonFrame.Size = UDim2.new(1, -15, 0, 40); ButtonFrame.BackgroundTransparency = 1; ButtonFrame.ZIndex = parent.ZIndex + 5
     local Button = Instance.new("TextButton", ButtonFrame); Button.Size = UDim2.new(1, 0, 0, 32); Button.Position = UDim2.new(0, 0, 0.5, -16); Button.BackgroundColor3 = Theme.Button; Button.Text = text; Button.Font = Enum.Font.GothamBold; Button.TextColor3 = Theme.Text; Button.TextSize = 12; Button.ZIndex = ButtonFrame.ZIndex + 1; Round(Button, 6)
-    local ButtonStroke = Instance.new("UIStroke", Button); ButtonStroke.Color = Theme.Stroke; ButtonStroke.Thickness = 0.8
     Button.MouseButton1Click:Connect(callback)
     return ButtonFrame
 end
+
+-- ====================================================
+-- FEATURES CONTENT
+-- ====================================================
+local BoxCombatBoost = CreateFeatureBox(tabCombat)
+CreateSection(BoxCombatBoost, "Combat Booster")
+CreateManualInput(BoxCombatBoost, "Hitbox Size", "2", function(v) PlayerConfig.HitboxSize = v end)
+CreateToggle(BoxCombatBoost, "Enable Hitbox", false, function(v) PlayerConfig.HitboxEnabled = v end)
 
 local BoxAimbot = CreateFeatureBox(tabCombat)
 CreateSection(BoxAimbot, "Aim Logic System")
 CreateToggle(BoxAimbot, "Aim Bot 100% Lock", false, function(v) PlayerConfig.AimbotEnabled = v end)
 
-local CombatDropdown = CreateDropdownFixed(BoxAimbot, "Lock Player", RefreshCombatPlayers(), function(selected) 
-    if selected == "[ None / All Players ]" then
-        PlayerConfig.TargetPlayer = nil
-    else
-        PlayerConfig.TargetPlayer = selected
-    end
+local function RefreshPlrs() 
+    local n = {"[ None / All Players ]"}
+    for _, p in pairs(Players:GetPlayers()) do if p ~= LP then table.insert(n, p.Name) end end
+    return n 
+end
+
+local CombatDropdown = CreateDropdownFixed(BoxAimbot, "Lock Player", RefreshPlrs(), function(s) 
+    PlayerConfig.TargetPlayer = (s == "[ None / All Players ]") and nil or s 
 end)
+CreateButton(BoxAimbot, "🔄 Refresh Player List", function() CombatDropdown.Update(RefreshPlrs()) end)
 
-CreateButton(BoxAimbot, "🔄 Refresh Player List", function() 
-    CombatDropdown.Update(RefreshCombatPlayers()) 
-end)
-
-local AimNote = Instance.new("TextLabel", BoxAimbot); AimNote.Size = UDim2.new(1, -20, 0, 20); AimNote.Text = "Note: If no player selected, locks all visible"; AimNote.TextColor3 = Theme.SubText; AimNote.Font = Enum.Font.Gotham; AimNote.TextSize = 10; AimNote.BackgroundTransparency = 1
-
--- ====================================================
--- 👤 PLAYER TAB (RAPID GROUPED)
--- ====================================================
+-- PLAYER TAB
 local BoxPlayerMenu = CreateFeatureBox(tabPlayer)
 CreateSection(BoxPlayerMenu, "Player Environment & Stealth")
-
 CreateToggle(BoxPlayerMenu, "Enable NoClip", false, function(v) PlayerConfig.NoClip = v end)
 CreateToggle(BoxPlayerMenu, "Spin Bot Active", false, function(v) PlayerConfig.SpinBot = v end)
 CreateToggle(BoxPlayerMenu, "Invisible (Real Fixed)", false, function(v) 
     PlayerConfig.Invisible = v 
     local Char = LP.Character
-    if Char then
-        for _, p in pairs(Char:GetDescendants()) do
-            if p:IsA("BasePart") or p:IsA("Decal") then
-                p.Transparency = v and 1 or (p.Name == "HumanoidRootPart" and 1 or 0)
-            end
-        end
-    end
+    if Char then for _, p in pairs(Char:GetDescendants()) do if p:IsA("BasePart") or p:IsA("Decal") then p.Transparency = v and 1 or (p.Name == "HumanoidRootPart" and 1 or 0) end end end
 end)
 CreateToggle(BoxPlayerMenu, "God Mode (Semi)", false, function(v) PlayerConfig.GodMode = v end)
 CreateToggle(BoxPlayerMenu, "Freeze Camera", false, function(v) PlayerConfig.FreezeCam = v; Camera.CameraType = v and Enum.CameraType.Scriptable or Enum.CameraType.Custom end)
 CreateToggle(BoxPlayerMenu, "Fullbright", false, function(v) 
     PlayerConfig.Fullbright = v 
-    if not v then
-        Lighting.Ambient = OldLighting.Ambient
-        Lighting.OutdoorAmbient = OldLighting.OutdoorAmbient
-        Lighting.Brightness = OldLighting.Brightness
-        Lighting.ClockTime = OldLighting.ClockTime
-    end
+    if not v then Lighting.Ambient = OldLighting.Ambient; Lighting.OutdoorAmbient = OldLighting.OutdoorAmbient; Lighting.Brightness = OldLighting.Brightness; Lighting.ClockTime = OldLighting.ClockTime end
 end)
 
--- ====================================================
--- TP PLAYER TAB
--- ====================================================
+-- TP TAB
 local SelectedTPPlayer = nil
-local function RefreshPlayerDropdown()
-    local playerNames = {}
-    for _, plr in pairs(Players:GetPlayers()) do if plr ~= LP then table.insert(playerNames, plr.Name) end end
-    return playerNames
-end
-
 local BoxSelectPlayer = CreateFeatureBox(tabTP)
 CreateSection(BoxSelectPlayer, "Target Player")
-local PlayerDropdown = CreateDropdownFixed(BoxSelectPlayer, "Select Player", RefreshPlayerDropdown(), function(selected) SelectedTPPlayer = selected end)
-
+local PlayerDropdown = CreateDropdownFixed(BoxSelectPlayer, "Select Player", RefreshPlrs(), function(s) SelectedTPPlayer = s end)
 local BoxTPButtons = CreateFeatureBox(tabTP)
 CreateSection(BoxTPButtons, "Teleport Actions")
 CreateButton(BoxTPButtons, "🚀 Teleport to Player", function()
     if SelectedTPPlayer then
-        local target = Players:FindFirstChild(SelectedTPPlayer)
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-            LP.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2)
-        end
+        local t = Players:FindFirstChild(SelectedTPPlayer)
+        if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then LP.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2) end
     end
 end)
-CreateButton(BoxTPButtons, "🔄 Refresh List", function() PlayerDropdown.Update(RefreshPlayerDropdown()) end)
-
+CreateButton(BoxTPButtons, "🔄 Refresh List", function() PlayerDropdown.Update(RefreshPlrs()) end)
 local BoxTPAuto = CreateFeatureBox(tabTP)
 CreateSection(BoxTPAuto, "Automation")
 CreateToggle(BoxTPAuto, "Auto Follow (Smooth)", false, function(v) 
     PlayerConfig.AutoFollow = v 
-    if v then
-        task.spawn(function()
-            while PlayerConfig.AutoFollow do
-                local target = Players:FindFirstChild(SelectedTPPlayer or "")
-                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-                    LP.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0) 
-                    LP.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
-                end
-                RunService.Heartbeat:Wait()
-            end
-        end)
-    end
-end)
-CreateToggle(BoxTPAuto, "Spectate Player", false, function(v)
-    PlayerConfig.SpectatePlayer = v
-    if SelectedTPPlayer then
-        local target = Players:FindFirstChild(SelectedTPPlayer)
-        if target then Camera.CameraSubject = v and (target.Character and target.Character:FindFirstChild("Humanoid") or target.Character) or (LP.Character and LP.Character:FindFirstChild("Humanoid")) end
-    end
+    if v then task.spawn(function() while PlayerConfig.AutoFollow do local t = Players:FindFirstChild(SelectedTPPlayer or "") if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then LP.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0); LP.Character.HumanoidRootPart.CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3) end RunService.Heartbeat:Wait() end end) end
 end)
 
--- ====================================================
 -- VISUALS TAB
--- ====================================================
 local BoxESP = CreateFeatureBox(tabVisuals)
 CreateSection(BoxESP, "ESP Player")
 CreateToggle(BoxESP, "ESP Name", false, function(v) ESP_Config.Name = v end)
@@ -541,9 +503,7 @@ CreateToggle(BoxESP, "ESP Jarak", false, function(v) ESP_Config.Distance = v end
 CreateToggle(BoxESP, "ESP Line atau Garis Garis", false, function(v) ESP_Config.Lines = v end)
 CreateToggle(BoxESP, "ESP Skeleton", false, function(v) ESP_Config.Skeleton = v end)
 
--- ====================================================
 -- MOVEMENT TAB
--- ====================================================
 local MovementVars = { WS_Enabled = false, WS_Amount = 16, JP_Enabled = false, JP_Amount = 50, InfJump = false }
 local BoxMoveConfig = CreateFeatureBox(tabMove)
 CreateSection(BoxMoveConfig, "Movement Config")
@@ -553,17 +513,13 @@ CreateManualInput(BoxMoveConfig, "JumpPower Set", "50", function(val) MovementVa
 CreateToggle(BoxMoveConfig, "Enable JumpPower", false, function(v) MovementVars.JP_Enabled = v; if v then pcall(function() LP.Character.Humanoid.UseJumpPower = true end) else pcall(function() LP.Character.Humanoid.JumpPower = 50 end) end end)
 CreateToggle(BoxMoveConfig, "Infinity Jump", false, function(v) MovementVars.InfJump = v end)
 
--- ====================================================
 -- MISC TAB
--- ====================================================
 local BoxEmote = CreateFeatureBox(tabMisc)
 CreateSection(BoxEmote, "Extra Scripts")
 CreateButton(BoxEmote, "🎭 Load Script Emote", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-AFEM-Max-Open-Alpha-50210"))() end)
-
 local BoxGraphic = CreateFeatureBox(tabMisc)
 CreateSection(BoxGraphic, "Graphics Booster")
 CreateButton(BoxGraphic, "✨ Load Script Grafik", function() loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-pshade-ultimate-25505"))() end)
-
 local BoxServer = CreateFeatureBox(tabMisc)
 CreateSection(BoxServer, "Server Management")
 CreateToggle(BoxServer, "Anti-AFK 100% Work", false, function(v) PlayerConfig.AntiAFK = v end)
@@ -571,65 +527,47 @@ CreateButton(BoxServer, "🌀 Respawn Character", function() LP.Character:BreakJ
 CreateButton(BoxServer, "🌍 Server Hop", function()
     local Http = game:GetService("HttpService")
     local Api = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-    local function NextServer()
+    pcall(function()
         local _v = Http:JSONDecode(game:HttpGet(Api))
-        for _, server in pairs(_v.data) do
-            if server.playing < server.maxPlayers and server.id ~= game.JobId then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, server.id, LP)
-                break
-            end
-        end
-    end
-    NextServer()
+        for _, s in pairs(_v.data) do if s.playing < s.maxPlayers and s.id ~= game.JobId then TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP) break end end
+    end)
 end)
 CreateButton(BoxServer, "⚡ Rejoin Server", function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP) end)
 
 -- ====================================================
--- CORE LOGIC LOOP (FIXED STATIC AIM LOCK)
+-- STABILIZED CORE LOOPS
 -- ====================================================
 RunService.RenderStepped:Connect(function()
     pcall(function()
-        -- STATIC 100% AIMBOT LOCK (STABILIZED)
         if PlayerConfig.AimbotEnabled then
-            local target = GetBestTarget()
-            if target and target.Character and target.Character:FindFirstChild("Head") then
-                -- Memperbaiki Fokus Kamera ke Target tanpa merusak rotasi karakter sendiri
-                local targetPos = target.Character.Head.Position
-                Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
-            end
+            local t = GetBestTarget()
+            if t and t.Character and t.Character:FindFirstChild("Head") then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Character.Head.Position) end
         end
-
-        -- Update UI Canvas Sizes
-        for _, data in pairs(Pages) do 
-            if data.Page and data.Layout then 
-                data.Page.CanvasSize = UDim2.new(0, 0, 0, data.Layout.AbsoluteContentSize.Y + 20) 
-            end 
-        end
+        -- UI Updates Throttled
+        for _, d in pairs(Pages) do if d.Page.Visible then d.Page.CanvasSize = UDim2.new(0,0,0, d.Layout.AbsoluteContentSize.Y + 20) end end
     end)
 end)
 
+local stepCounter = 0
 RunService.Stepped:Connect(function()
+    stepCounter = stepCounter + 1
     pcall(function()
         local Char = LP.Character
         local Hum = Char and Char:FindFirstChildOfClass("Humanoid")
-        
         if Hum then
             if MovementVars.WS_Enabled then Hum.WalkSpeed = MovementVars.WS_Amount end
             if MovementVars.JP_Enabled then Hum.JumpPower = MovementVars.JP_Amount end
         end
-
-        if PlayerConfig.NoClip and Char then
-            for _, v in pairs(Char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-        end
-        if PlayerConfig.SpinBot and Char and Char:FindFirstChild("HumanoidRootPart") then
-            Char.HumanoidRootPart.CFrame = Char.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(25), 0)
-        end
-        if PlayerConfig.HitboxEnabled then
+        if PlayerConfig.NoClip and Char then for _, v in pairs(Char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end end
+        if PlayerConfig.SpinBot and Char and Char:FindFirstChild("HumanoidRootPart") then Char.HumanoidRootPart.CFrame = Char.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(25), 0) end
+        
+        -- Hitbox logic (only every 2 steps to save CPU)
+        if PlayerConfig.HitboxEnabled and stepCounter % 2 == 0 then
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-                    local hrp = p.Character.HumanoidRootPart
-                    hrp.Size = Vector3.new(PlayerConfig.HitboxSize, PlayerConfig.HitboxSize, PlayerConfig.HitboxSize)
-                    hrp.Transparency = 0.7; hrp.Color = Theme.Accent; hrp.CanCollide = false
+                    local h = p.Character.HumanoidRootPart
+                    h.Size = Vector3.new(PlayerConfig.HitboxSize, PlayerConfig.HitboxSize, PlayerConfig.HitboxSize)
+                    h.Transparency = 0.7; h.CanCollide = false
                 end
             end
         end
@@ -638,7 +576,8 @@ end)
 
 UIS.JumpRequest:Connect(function() if MovementVars.InfJump then pcall(function() LP.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping") end) end end)
 
-RunService.RenderStepped:Connect(function()
+-- Particle Loop (Optimized)
+RunService.Heartbeat:Connect(function()
     if ParticlesActive then
         for _, p in pairs(ParticleList) do
             local pos = p.obj.Position; local nX, nY = pos.X.Scale + p.vel.X, pos.Y.Scale + p.vel.Y
@@ -647,10 +586,9 @@ RunService.RenderStepped:Connect(function()
             p.obj.Position = UDim2.new(nX, 0, nY, 0)
         end
     end
-    SettingsOverlay.CanvasSize = UDim2.new(0, 0, 0, SettingsLayout.AbsoluteContentSize.Y + 20)
-    TabHolder.CanvasSize = UDim2.new(0, 0, 0, TabListLayout.AbsoluteContentSize.Y + 10)
+    if settingsOpen then SettingsOverlay.CanvasSize = UDim2.new(0, 0, 0, SettingsLayout.AbsoluteContentSize.Y + 20) end
 end)
 
 Pages["Combat"].Button.BackgroundTransparency = 0.5; Pages["Combat"].Button.TextColor3 = Theme.Accent; Pages["Combat"].Page.Visible = true
 
-print("Ciphub V99 Updated: Tab Player Grouped & Static Aim Fix Loaded! 🌊")
+print("Ciphub V99: Stabilized for Mobile. 🌊")
